@@ -2,7 +2,12 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #333333;
+  
+  /* Colores del degradado suave */
+  --soft-teal: #7DD4CC;
+  --soft-beige: #D5CCC5;
+  --soft-pink: #FFB5B5;
 }
 
 @theme inline {
@@ -12,15 +17,203 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background: linear-gradient(135deg, #6ECCC4 0%, #C8BFB8 50%, #F4A5A5 100%);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  min-height: 100vh;
+}
+
+/* Estilos personalizados para inputs */
+.input-nemo {
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 2px solid #D5CCC5;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: #333;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+}
+
+.input-nemo::placeholder {
+  color: rgba(150, 150, 150, 0.6);
+}
+
+.input-nemo:focus {
+  outline: none;
+  border-color: #7DD4CC;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(125, 212, 204, 0.15);
+  transform: translateY(-1px);
+}
+
+/* BOTÓN PRIMARIO CON DEGRADADO DE LA IMAGEN */
+.btn-nemo-primary {
+  width: 100%;
+  background: linear-gradient(135deg, #7DD4CC 0%, #D5CCC5 50%, #FFB5B5 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 0.875rem 1.5rem;
+  border-radius: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  transform: scale(1);
+  box-shadow: 0 6px 20px rgba(125, 212, 204, 0.4);
+  letter-spacing: 0.3px;
+}
+
+.btn-nemo-primary:hover {
+  transform: scale(1.03) translateY(-2px);
+  box-shadow: 0 10px 30px rgba(125, 212, 204, 0.5);
+  background: linear-gradient(135deg, #6CC4BC 0%, #C5BDB5 50%, #FFA5A5 100%);
+}
+
+.btn-nemo-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-nemo-primary:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(125, 212, 204, 0.4);
+}
+
+.btn-nemo-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: scale(1);
+}
+
+/* Botón secundario */
+.btn-nemo-secondary {
+  width: 100%;
+  background: linear-gradient(135deg, #D5CCC5 0%, #FFB5B5 100%);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  transform: scale(1);
+  box-shadow: 0 4px 15px rgba(255, 181, 181, 0.35);
+}
+
+.btn-nemo-secondary:hover {
+  transform: scale(1.02) translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 181, 181, 0.45);
+  background: linear-gradient(135deg, #C5BCB5 0%, #FFA5A5 100%);
+}
+
+.btn-nemo-secondary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 181, 181, 0.4);
+}
+
+.btn-nemo-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: scale(1);
+}
+
+/* Tarjeta */
+.card-nemo {
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 2rem;
+}
+
+/* Links */
+.link-nemo {
+  color: #7DD4CC;
+  text-decoration: underline;
+  text-decoration-color: #D5CCC5;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.link-nemo:hover {
+  color: #FFB5B5;
+  text-decoration-color: #FFB5B5;
+  transform: translateX(2px);
+}
+
+/* Animaciones */
+@keyframes gentle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.animate-gentle-pulse {
+  animation: gentle-pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-float {
+  animation: float 3.5s ease-in-out infinite;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7DD4CC, #FFB5B5);
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6CC4BC, #FFA5A5);
+}
+
+/* Efectos adicionales para inputs */
+.input-nemo:hover {
+  border-color: #B5D8D3;
+}
+
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }
