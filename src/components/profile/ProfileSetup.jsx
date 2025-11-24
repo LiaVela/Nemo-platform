@@ -29,36 +29,61 @@ export default function Profile() {
     confirmarContrasena: '',
   });
 
+  // ✅ FIX: Usar onAuthStateChanged para esperar autenticación
   useEffect(() => {
-    cargarDatosUsuario();
-  }, []);
-
-  const cargarDatosUsuario = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        cargarDatosUsuario(user);
+      } else {
+        setCargando(false);
         router.push('/login');
-        return;
       }
+    });
 
-      const docRef = doc(db, 'usuarios', user.uid);
-      const docSnap = await getDoc(docRef);
+    return () => unsubscribe();
+  }, [router]);
 
+  useEffect(() => {
+    if (!editando) {
+      setPrevisualizacionImagen(null);
+    }
+  }, [editando]);
+
+  // ✅ FIX: Recibir user como parámetro y cambiar 'usuarios' a 'users'
+  const cargarDatosUsuario = async (user) => {
+    try {
+      setCargando(true);
+
+      // ✅ Cambiar 'usuarios' a 'users'
+      const docRef = doc(db, 'users', user.uid);
+      
       let datosFirestore = {};
 
-      if (!docSnap.exists()) {
-        const nuevosDatos = {
+      // ✅ Manejo de errores mejorado
+      try {
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists()) {
+          const nuevosDatos = {
+            nombre: user.displayName || '',
+            email: user.email || '',
+            photoURL: user.photoURL || '',
+            fechaCreacion: user.metadata.creationTime,
+            fechaActualizacion: new Date().toISOString(),
+          };
+          
+          await setDoc(docRef, nuevosDatos);
+          datosFirestore = nuevosDatos;
+        } else {
+          datosFirestore = docSnap.data();
+        }
+      } catch (firestoreError) {
+        console.warn('⚠️ Error de Firestore, usando datos de Auth:', firestoreError);
+        datosFirestore = {
           nombre: user.displayName || '',
           email: user.email || '',
           photoURL: user.photoURL || '',
-          fechaCreacion: user.metadata.creationTime,
-          fechaActualizacion: new Date().toISOString(),
         };
-        
-        await setDoc(docRef, nuevosDatos);
-        datosFirestore = nuevosDatos;
-      } else {
-        datosFirestore = docSnap.data();
       }
 
       const datosUsuario = {
@@ -113,13 +138,11 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validar tipo de archivo
     if (!file.type.startsWith('image/')) {
       mostrarMensaje('error', 'Por favor selecciona una imagen válida');
       return;
     }
 
-    // Validar tamaño (máximo 5MB)
     if (file.size > 5 * 1024 * 1024) {
       mostrarMensaje('error', 'La imagen no debe superar los 5MB');
       return;
@@ -128,50 +151,75 @@ export default function Profile() {
     try {
       setSubiendoImagen(true);
 
-      // Crear previsualización
       const reader = new FileReader();
       reader.onloadend = () => {
         setPrevisualizacionImagen(reader.result);
       };
       reader.readAsDataURL(file);
 
-      // Subir imagen a Firebase Storage
       const user = auth.currentUser;
-      const storageRef = ref(storage, `profile-images/${user.uid}/${Date.now()}_${file.name}`);
+      if (!user) throw new Error('Usuario no autenticado');
+
+      // ✅ FIX: Cambiar ruta de Storage según tus reglas
+      const storageRef = ref(storage, `users/${user.uid}/profile/${Date.now()}_${file.name}`);
       
+      console.log('📤 Subiendo imagen a Storage...');
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
+      console.log('✅ URL obtenida:', downloadURL);
 
-      // Actualizar Firestore
-      const docRef = doc(db, 'usuarios', user.uid);
+      await updateProfile(user, {
+        photoURL: downloadURL
+      });
+      console.log('✅ Firebase Auth actualizado');
+
+      await user.reload();
+
+      // ✅ Cambiar 'usuarios' a 'users'
+      const docRef = doc(db, 'users', user.uid);
       await setDoc(docRef, {
         photoURL: downloadURL,
         fechaActualizacion: new Date().toISOString(),
       }, { merge: true });
+      console.log('✅ Firestore actualizado');
 
-      // Actualizar estado local
       setUsuario(prev => ({
         ...prev,
         photoURL: downloadURL,
       }));
 
-      mostrarMensaje('success', '✓ Foto de perfil actualizada');
+      setPrevisualizacionImagen(null);
+
+      mostrarMensaje('success', 'Foto de perfil actualizada');
     } catch (error) {
-      console.error('Error al subir imagen:', error);
-      mostrarMensaje('error', 'Error al subir la imagen');
+      console.error('❌ Error al subir imagen:', error);
+      mostrarMensaje('error', `Error al subir la imagen: ${error.message}`);
     } finally {
       setSubiendoImagen(false);
     }
   };
 
+  const handleEditarClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('🖊️ Modo edición activado');
+    setEditando(true);
+    setMensaje({ tipo: '', texto: '' });
+  };
+
   const handleGuardar = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('💾 Iniciando guardado...');
     setGuardando(true);
 
     try {
       const user = auth.currentUser;
+      if (!user) {
+        throw new Error('Usuario no autenticado');
+      }
 
-      // Validar contraseñas si se están cambiando
       if (formData.nuevaContrasena) {
         if (formData.nuevaContrasena.length < 6) {
           mostrarMensaje('error', 'La contraseña debe tener al menos 6 caracteres');
@@ -185,25 +233,29 @@ export default function Profile() {
         }
       }
 
-      // Actualizar nombre en Firebase Auth
+      console.log('🔄 Actualizando perfil...');
+
       if (formData.nombre !== usuario.nombre) {
         await updateProfile(user, {
           displayName: formData.nombre,
         });
+        console.log('✅ Nombre actualizado en Auth');
       }
 
-      // Actualizar email si cambió
       if (formData.email !== usuario.email) {
         await updateEmail(user, formData.email);
+        console.log('✅ Email actualizado en Auth');
       }
 
-      // Actualizar contraseña si se proporcionó
       if (formData.nuevaContrasena) {
         await updatePassword(user, formData.nuevaContrasena);
+        console.log('✅ Contraseña actualizada');
       }
 
-      // Actualizar datos en Firestore
-      const docRef = doc(db, 'usuarios', user.uid);
+      await user.reload();
+
+      // ✅ Cambiar 'usuarios' a 'users'
+      const docRef = doc(db, 'users', user.uid);
       const datosActualizados = {
         nombre: formData.nombre,
         email: formData.email,
@@ -211,9 +263,9 @@ export default function Profile() {
       };
 
       await setDoc(docRef, datosActualizados, { merge: true });
+      console.log('✅ Firestore actualizado');
 
-      // Recargar datos
-      await cargarDatosUsuario();
+      await cargarDatosUsuario(user);
       setEditando(false);
       setFormData(prev => ({
         ...prev,
@@ -222,7 +274,7 @@ export default function Profile() {
       }));
       setPrevisualizacionImagen(null);
 
-      mostrarMensaje('success', '✓ Perfil actualizado correctamente');
+      mostrarMensaje('success', 'Perfil actualizado correctamente');
     } catch (error) {
       console.error('Error al actualizar:', error);
       
@@ -235,6 +287,10 @@ export default function Profile() {
         mensajeError = 'La contraseña es muy débil';
       } else if (error.code === 'permission-denied') {
         mensajeError = 'Error de permisos. Verifica las reglas de Firestore.';
+      } else if (error.code === 'auth/invalid-email') {
+        mensajeError = 'El email no es válido';
+      } else {
+        mensajeError = `Error: ${error.message}`;
       }
       
       mostrarMensaje('error', mensajeError);
@@ -243,7 +299,10 @@ export default function Profile() {
     }
   };
 
-  const handleCancelar = () => {
+  const handleCancelar = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('❌ Edición cancelada');
     setEditando(false);
     setFormData({
       nombre: usuario.nombre,
@@ -257,8 +316,8 @@ export default function Profile() {
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 dark:border-blue-400"></div>
       </div>
     );
   }
@@ -270,62 +329,50 @@ export default function Profile() {
   const imagenMostrar = previsualizacionImagen || usuario?.photoURL;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8 px-4">
       <div className="max-w-2xl mx-auto">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors"
+          className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white mb-6 transition-colors"
         >
           <ArrowLeft size={20} />
           Volver
         </button>
 
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-6">
           <div className="flex flex-col items-center mb-8">
-            {/* Foto de perfil */}
             <div className="relative group mb-4">
-              <div 
-                onClick={handleImagenClick}
-                className={`relative w-32 h-32 rounded-full overflow-hidden shadow-lg ${
-                  editando ? 'cursor-pointer' : ''
-                }`}
-              >
+              <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-purple-200 dark:border-purple-700 shadow-lg">
                 {imagenMostrar ? (
                   <Image
                     src={imagenMostrar}
                     alt="Foto de perfil"
-                    fill
-                    className="object-cover"
-                    priority
+                    width={128}
+                    height={128}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-5xl font-bold">
-                    {usuario?.nombre?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                )}
-                
-                {editando && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    {subiendoImagen ? (
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                    ) : (
-                      <Camera size={32} className="text-white" />
-                    )}
+                  <div className="w-full h-full bg-gradient-to-br from-purple-400 to-pink-400 dark:from-purple-600 dark:to-pink-600 flex items-center justify-center">
+                    <User size={48} className="text-white" />
                   </div>
                 )}
               </div>
-
+              
               {editando && (
                 <button
                   type="button"
                   onClick={handleImagenClick}
                   disabled={subiendoImagen}
-                  className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400"
+                  className="absolute bottom-0 right-0 bg-purple-600 dark:bg-purple-700 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 dark:hover:bg-purple-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Upload size={18} />
+                  {subiendoImagen ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                    <Camera size={20} />
+                  )}
                 </button>
               )}
-
+              
               <input
                 ref={fileInputRef}
                 type="file"
@@ -335,35 +382,28 @@ export default function Profile() {
               />
             </div>
 
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Mi Perfil</h1>
-            <p className="text-gray-500">Gestiona tu información personal</p>
-
-            {!editando && (
-              <button
-                onClick={() => setEditando(true)}
-                className="mt-4 flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-md hover:shadow-lg"
-              >
-                <Edit2 size={18} />
-                Editar Perfil
-              </button>
-            )}
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-1">
+              {usuario.nombre || 'Usuario'}
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400">{usuario.email}</p>
           </div>
 
           {mensaje.texto && (
-            <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${
-              mensaje.tipo === 'success' 
-                ? 'bg-green-100 text-green-800 border border-green-200' 
-                : 'bg-red-100 text-red-800 border border-red-200'
-            }`}>
-              {mensaje.tipo === 'success' ? <Check size={20} /> : <X size={20} />}
+            <div
+              className={`mb-6 p-4 rounded-lg ${
+                mensaje.tipo === 'success'
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
+              }`}
+            >
               {mensaje.texto}
             </div>
           )}
 
           <form onSubmit={handleGuardar} className="space-y-6">
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-medium mb-2">
-                <User size={18} />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <User size={16} className="inline mr-2" />
                 Nombre completo
               </label>
               <input
@@ -372,15 +412,14 @@ export default function Profile() {
                 value={formData.nombre}
                 onChange={handleChange}
                 disabled={!editando}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700 disabled:text-gray-500 dark:disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all"
                 placeholder="Tu nombre completo"
-                required
               />
             </div>
 
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-medium mb-2">
-                <Mail size={18} />
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Mail size={16} className="inline mr-2" />
                 Correo electrónico
               </label>
               <input
@@ -389,98 +428,87 @@ export default function Profile() {
                 value={formData.email}
                 onChange={handleChange}
                 disabled={!editando}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-all"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent disabled:bg-gray-50 dark:disabled:bg-gray-700 disabled:text-gray-500 dark:disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all"
                 placeholder="tu@email.com"
-                required
               />
             </div>
 
             {editando && (
               <>
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Lock size={20} />
-                    Cambiar Contraseña (opcional)
-                  </h3>
-                </div>
-
                 <div>
-                  <label className="flex items-center gap-2 text-gray-700 font-medium mb-2">
-                    Nueva contraseña
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <Lock size={16} className="inline mr-2" />
+                    Nueva contraseña (opcional)
                   </label>
                   <input
                     type="password"
                     name="nuevaContrasena"
                     value={formData.nuevaContrasena}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all"
                     placeholder="Mínimo 6 caracteres"
-                    minLength={6}
                   />
                 </div>
 
                 <div>
-                  <label className="flex items-center gap-2 text-gray-700 font-medium mb-2">
-                    Confirmar contraseña
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <Lock size={16} className="inline mr-2" />
+                    Confirmar nueva contraseña
                   </label>
                   <input
                     type="password"
                     name="confirmarContrasena"
                     value={formData.confirmarContrasena}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-all"
                     placeholder="Repite la contraseña"
                   />
                 </div>
               </>
             )}
 
-            {editando && (
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="submit"
-                  disabled={guardando || subiendoImagen}
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium shadow-md hover:shadow-lg"
-                >
-                  {guardando ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={18} />
-                      Guardar Cambios
-                    </>
-                  )}
-                </button>
-                
+            <div className="flex gap-4 pt-4">
+              {!editando ? (
                 <button
                   type="button"
-                  onClick={handleCancelar}
-                  disabled={guardando || subiendoImagen}
-                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium shadow-md hover:shadow-lg"
+                  onClick={handleEditarClick}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-700 dark:to-pink-700 text-white py-3 px-6 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 dark:hover:from-purple-800 dark:hover:to-pink-800 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                 >
-                  <X size={18} />
-                  Cancelar
+                  <Edit2 size={20} />
+                  Editar Perfil
                 </button>
-              </div>
-            )}
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCancelar}
+                    disabled={guardando}
+                    className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <X size={20} />
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={guardando}
+                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 dark:from-green-700 dark:to-emerald-700 text-white py-3 px-6 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 dark:hover:from-green-800 dark:hover:to-emerald-800 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {guardando ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={20} />
+                        Guardar Cambios
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
           </form>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Información de la cuenta</h3>
-          <div className="space-y-3 text-gray-600">
-            <p>
-              <span className="font-medium">Cuenta creada:</span>{' '}
-              {new Date(usuario?.fechaCreacion).toLocaleDateString('es-ES', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </p>
-          </div>
         </div>
       </div>
     </div>

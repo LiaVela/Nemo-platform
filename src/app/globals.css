@@ -10,6 +10,15 @@
   --soft-pink: #FFB5B5;
 }
 
+/* 🌙 DARK MODE VARIABLES */
+html.dark {
+  --background: #111827;
+  --foreground: #f3f4f6;
+  --soft-teal: #5fb8b0;
+  --soft-beige: #8b7f77;
+  --soft-pink: #d98989;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -17,11 +26,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* 🎨 BODY - Modo Claro por Defecto */
 body {
-  background: linear-gradient(135deg, #6ECCC4 0%, #C8BFB8 50%, #F4A5A5 100%);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* 🌙 BODY - Modo Oscuro */
+html.dark body {
+  color: var(--foreground);
 }
 
 /* Estilos personalizados para inputs */
@@ -36,8 +51,19 @@ body {
   font-size: 1rem;
 }
 
+/* 🌙 Input Dark Mode */
+html.dark .input-nemo {
+  background-color: rgba(31, 41, 55, 0.95);
+  border-color: #4b5563;
+  color: #f3f4f6;
+}
+
 .input-nemo::placeholder {
   color: rgba(150, 150, 150, 0.6);
+}
+
+html.dark .input-nemo::placeholder {
+  color: rgba(156, 163, 175, 0.6);
 }
 
 .input-nemo:focus {
@@ -46,6 +72,20 @@ body {
   background-color: #ffffff;
   box-shadow: 0 0 0 4px rgba(125, 212, 204, 0.15);
   transform: translateY(-1px);
+}
+
+html.dark .input-nemo:focus {
+  background-color: #1f2937;
+  border-color: #5fb8b0;
+  box-shadow: 0 0 0 4px rgba(95, 184, 176, 0.25);
+}
+
+.input-nemo:hover {
+  border-color: #B5D8D3;
+}
+
+html.dark .input-nemo:hover {
+  border-color: #6b7280;
 }
 
 /* BOTÓN PRIMARIO CON DEGRADADO DE LA IMAGEN */
@@ -65,10 +105,20 @@ body {
   letter-spacing: 0.3px;
 }
 
+html.dark .btn-nemo-primary {
+  background: linear-gradient(135deg, #5fb8b0 0%, #8b7f77 50%, #d98989 100%);
+  box-shadow: 0 6px 20px rgba(95, 184, 176, 0.3);
+}
+
 .btn-nemo-primary:hover {
   transform: scale(1.03) translateY(-2px);
   box-shadow: 0 10px 30px rgba(125, 212, 204, 0.5);
   background: linear-gradient(135deg, #6CC4BC 0%, #C5BDB5 50%, #FFA5A5 100%);
+}
+
+html.dark .btn-nemo-primary:hover {
+  background: linear-gradient(135deg, #4fa8a0 0%, #7b6f67 50%, #c97979 100%);
+  box-shadow: 0 10px 30px rgba(95, 184, 176, 0.4);
 }
 
 .btn-nemo-primary:active {
@@ -78,6 +128,10 @@ body {
 .btn-nemo-primary:focus {
   outline: none;
   box-shadow: 0 0 0 4px rgba(125, 212, 204, 0.4);
+}
+
+html.dark .btn-nemo-primary:focus {
+  box-shadow: 0 0 0 4px rgba(95, 184, 176, 0.3);
 }
 
 .btn-nemo-primary:disabled {
@@ -101,15 +155,29 @@ body {
   box-shadow: 0 4px 15px rgba(255, 181, 181, 0.35);
 }
 
+html.dark .btn-nemo-secondary {
+  background: linear-gradient(135deg, #8b7f77 0%, #d98989 100%);
+  box-shadow: 0 4px 15px rgba(217, 137, 137, 0.25);
+}
+
 .btn-nemo-secondary:hover {
   transform: scale(1.02) translateY(-1px);
   box-shadow: 0 6px 20px rgba(255, 181, 181, 0.45);
   background: linear-gradient(135deg, #C5BCB5 0%, #FFA5A5 100%);
 }
 
+html.dark .btn-nemo-secondary:hover {
+  background: linear-gradient(135deg, #7b6f67 0%, #c97979 100%);
+  box-shadow: 0 6px 20px rgba(217, 137, 137, 0.35);
+}
+
 .btn-nemo-secondary:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 181, 181, 0.4);
+}
+
+html.dark .btn-nemo-secondary:focus {
+  box-shadow: 0 0 0 3px rgba(217, 137, 137, 0.3);
 }
 
 .btn-nemo-secondary:disabled {
@@ -126,6 +194,13 @@ body {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.4);
   padding: 2rem;
+  transition: all 0.3s ease;
+}
+
+html.dark .card-nemo {
+  background-color: rgba(31, 41, 55, 0.92);
+  border: 1px solid rgba(75, 85, 99, 0.4);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 
 /* Links */
@@ -137,10 +212,20 @@ body {
   font-weight: 500;
 }
 
+html.dark .link-nemo {
+  color: #5fb8b0;
+  text-decoration-color: #8b7f77;
+}
+
 .link-nemo:hover {
   color: #FFB5B5;
   text-decoration-color: #FFB5B5;
   transform: translateX(2px);
+}
+
+html.dark .link-nemo:hover {
+  color: #d98989;
+  text-decoration-color: #d98989;
 }
 
 /* Animaciones */
@@ -180,21 +265,28 @@ body {
   border-radius: 10px;
 }
 
+html.dark ::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.3);
+}
+
 ::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #7DD4CC, #FFB5B5);
   border-radius: 10px;
   border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
+html.dark ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #5fb8b0, #d98989);
+  border: 2px solid rgba(31, 41, 55, 0.3);
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #6CC4BC, #FFA5A5);
 }
 
-/* Efectos adicionales para inputs */
-.input-nemo:hover {
-  border-color: #B5D8D3;
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #4fa8a0, #c97979);
 }
-
 
 @keyframes slide-in {
   from {
@@ -216,4 +308,36 @@ body {
   transition-property: background-color, border-color, color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+/* Estilos para impresión */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  /* Evitar saltos de página dentro de secciones */
+  section {
+    page-break-inside: avoid;
+  }
+
+  /* Mejor renderizado de colores */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
