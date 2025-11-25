@@ -38,7 +38,7 @@ export default function TermsPage() {
                 2. Uso del Servicio
               </h2>
               <ul className="list-disc list-inside space-y-2">
-                <li>Debes ser mayor de 10 años para usar Nemo</li>
+                <li>Debes ser mayor de 13 años para usar Nemo</li>
                 <li>Solo puedes crear una cuenta por persona</li>
                 <li>No debes compartir tus credenciales de acceso</li>
                 <li>Eres responsable de mantener la seguridad de tu cuenta</li>
