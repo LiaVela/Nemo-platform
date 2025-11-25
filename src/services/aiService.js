@@ -212,7 +212,7 @@ export async function analyzeClinicalReport(entries) {
     }
 
     // Limitar a últimas 30 entradas
-    const entriesToAnalyze = entries.slice(-30);
+    const entriesToAnalyze = entries.slice(-10);
 
     // Preparar texto de entradas
     const entriesText = entriesToAnalyze.map((entry, index) => {

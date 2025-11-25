@@ -22,7 +22,7 @@ export const createEntry = async (entryData) => {
     const user = auth.currentUser;
     if (!user) throw new Error('Usuario no autenticado');
 
-    const docRef = await addDoc(collection(db, 'entries'), {
+    const docRef = await addDoc(collection(db, 'journal_entries'), {
       userId: user.uid,
       content: entryData.content,
       title: entryData.title || '',
@@ -45,7 +45,7 @@ export const createEntry = async (entryData) => {
 export const getUserEntries = async (userId, limitCount = 50) => {
   try {
     const q = query(
-      collection(db, 'entries'),
+      collection(db, 'journal_entries'),
       where('userId', '==', userId),
       orderBy('createdAt', 'desc'),
       limit(limitCount)
@@ -66,7 +66,7 @@ export const getUserEntries = async (userId, limitCount = 50) => {
 
 export const getEntryById = async (entryId) => {
   try {
-    const docRef = doc(db, 'entries', entryId);
+    const docRef = doc(db, 'journal_entries', entryId);
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) {
@@ -94,7 +94,7 @@ export const getEntryById = async (entryId) => {
 
 export const updateEntry = async (entryId, updates) => {
   try {
-    const docRef = doc(db, 'entries', entryId);
+    const docRef = doc(db, 'journal_entries', entryId);
     
     await updateDoc(docRef, {
       ...updates,
@@ -110,7 +110,7 @@ export const updateEntry = async (entryId, updates) => {
 
 export const deleteEntry = async (entryId) => {
   try {
-    const docRef = doc(db, 'entries', entryId);
+    const docRef = doc(db, 'journal_entries', entryId);
     await deleteDoc(docRef);
     return true;
   } catch (error) {

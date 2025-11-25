@@ -30,7 +30,7 @@ export function DeleteAccountModal({ isOpen, onClose }) {
       if (!user) throw new Error('No hay usuario autenticado');
 
       // 1. Eliminar todas las entradas del usuario
-      const entriesRef = collection(db, 'entries');
+      const entriesRef = collection(db, 'journal_entries');
       const q = query(entriesRef, where('userId', '==', user.uid));
       const querySnapshot = await getDocs(q);
       
