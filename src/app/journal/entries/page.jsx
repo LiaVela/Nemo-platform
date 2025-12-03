@@ -236,7 +236,7 @@ function EntriesContent() {
             <span>Volver al Dashboard</span>
           </button>
           
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
                 <BookOpen className="w-6 h-6 text-purple-600 dark:text-purple-400" />
@@ -253,7 +253,7 @@ function EntriesContent() {
 
             <button
               onClick={() => router.push('/journal/new')}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-xl w-full sm:w-auto"
             >
               <Plus className="w-5 h-5" />
               Nueva Entrada
@@ -366,9 +366,9 @@ function EntriesContent() {
               return (
                 <div
                   key={entry.id}
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-all p-6 border border-gray-200 dark:border-gray-700"
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-all p-4 sm:p-6 border border-gray-200 dark:border-gray-700"
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     {/* Contenido principal */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-3">
@@ -397,7 +397,7 @@ function EntriesContent() {
                     </div>
 
                     {/* Acciones */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-end gap-2 w-full sm:w-auto border-t border-gray-100 dark:border-gray-700 sm:border-0 pt-3 sm:pt-0">
                       <button
                         onClick={() => setViewingEntry(entry)}
                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
