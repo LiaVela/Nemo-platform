@@ -33,7 +33,7 @@ const QuickActions = () => {
       description: 'Análisis detallado',
       color: 'bg-sky-500 dark:bg-sky-600',
       hoverColor: 'hover:bg-sky-600 dark:hover:bg-sky-700',
-      link: '/emotions/tracker'
+      link: '/analysis'
     },
     {
       id: 4,
