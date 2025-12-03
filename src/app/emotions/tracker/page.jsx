@@ -29,6 +29,11 @@ export default function MoodTrackerPage() {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
+  const getMoodDetails = (moodId) => {
+    const mood = Object.values(MOOD_LEVELS).find(m => m.id === moodId);
+    return mood ? { emoji: mood.icon, label: mood.label } : { emoji: '-', label: 'N/A' };
+  };
+
   // Cargar moods del mes
   useEffect(() => {
     const loadMoods = async () => {
@@ -168,34 +173,37 @@ export default function MoodTrackerPage() {
 
           {/* Estadísticas */}
           {stats && stats.total > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Días registrados</p>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  {stats.total}
-                </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              
+              {/* 1. Días Registrados */}
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-6 border border-purple-100 dark:border-purple-800 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 font-medium">Días registrados</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                    {stats.total}
+                  </p>
+                </div>
+                <div className="p-3 bg-purple-100 dark:bg-purple-800/30 rounded-full">
+                  <CalendarIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
               </div>
 
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Promedio</p>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {stats.average} {getMoodEmoji(Math.round(parseFloat(stats.average)))}
-                </p>
+              {/* 2. Promedio */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-100 dark:border-blue-800 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 font-medium">Promedio del mes</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                      {stats.average || '0'}
+                    </p>
+                    <span className="text-sm text-gray-500">/ 5</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-blue-100 dark:bg-blue-800/30 rounded-full">
+                  <TrendingUp className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
               </div>
 
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Mejor día</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {getMoodEmoji(stats.best)}
-                </p>
-              </div>
-
-              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Día difícil</p>
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                  {getMoodEmoji(stats.worst)}
-                </p>
-              </div>
             </div>
           )}
         </div>
@@ -207,7 +215,6 @@ export default function MoodTrackerPage() {
           moods={moods}
           onDateClick={handleDateClick}
         />
-
         <MoodLegend />
 
         {/* Modal Selector */}
