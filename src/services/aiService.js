@@ -85,22 +85,44 @@ async function findWorkingModel() {
  * Limpiar respuesta JSON de Gemini
  */
 function cleanJSONResponse(text) {
-  // Remover markdown code blocks
-  let cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+  if (!text) return "[]";
+
+  // 1. Quitar bloques de código markdown
+  let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
   
-  // Remover comentarios
-  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
-  cleaned = cleaned.replace(/\/\/.*/g, '');
+  // 2. Quitar comentarios JS/JSON
+  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // /* ... */
+  cleaned = cleaned.replace(/\/\/.*/g, '');          // // ...
   
-  // Encontrar el primer { y el último }
+  cleaned = cleaned.trim();
+
+  // 3. Encontrar el inicio y fin del JSON (Objeto o Array)
   const firstBrace = cleaned.indexOf('{');
-  const lastBrace = cleaned.lastIndexOf('}');
+  const firstBracket = cleaned.indexOf('[');
   
-  if (firstBrace !== -1 && lastBrace !== -1) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  let start = -1;
+  let end = -1;
+
+  // Determinar si empieza con { (Objeto) o [ (Array) y cuál aparece primero
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    // Es un objeto
+    start = firstBrace;
+    end = cleaned.lastIndexOf('}');
+  } else if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+    // Es un array
+    start = firstBracket;
+    end = cleaned.lastIndexOf(']');
+  }
+
+  if (start !== -1 && end !== -1) {
+    cleaned = cleaned.substring(start, end + 1);
+  } else {
+    // Si no encuentra estructura JSON clara, intentar retornar el texto limpio o un array vacío si falló todo
+    console.warn('⚠️ No se detectó estructura JSON clara ({} o []).');
+    return cleaned || "[]";
   }
   
-  return cleaned.trim();
+  return cleaned;
 }
 
 // ============================================================================
@@ -211,7 +233,7 @@ export async function analyzeClinicalReport(entries) {
       throw new Error('No hay entradas para analizar');
     }
 
-    // Limitar a últimas 30 entradas
+    // Limitar a últimas 10 entradas
     const entriesToAnalyze = entries.slice(-10);
 
     // Preparar texto de entradas
@@ -538,5 +560,108 @@ export async function analyzeJournalEntry(entryData) {
   };
 }
 
+// ============================================================================
+// NUEVAS FUNCIONES PARA DASHBOARD (INSIGHTS Y PROMPTS)
+// ============================================================================
+/**
+ * Generar insights personalizados para el dashboard basados en entradas recientes
+ */
+export async function generateDashboardInsights(entries) {
+  try {
+    const ai = getAI();
+    
+    if (!entries || entries.length === 0) return [];
+
+    const recentEntries = entries.slice(-10);
+    const entriesSummary = recentEntries.map(e => `[${e.entryDate}] (${e.emotion?.name || 'Neutro'}): ${e.content?.substring(0, 100)}`).join('\n');
+
+    const modelName = await findWorkingModel();
+    const model = ai.getGenerativeModel({ model: modelName });
+
+    // CAMBIO: Instrucciones estrictas de longitud
+    const prompt = `
+    Analiza estas entradas de diario recientes y genera 3 o 4 insights (perspectivas) cortos y valiosos para el usuario y para una interfaz móvil.
+    
+    Entradas:
+    ${entriesSummary}
+
+    REGLAS DE LONGITUD (ESTRICTAS):
+    - Título: Máximo 4 palabras.
+    - Descripción: Máximo 20 palabras. Directo al grano.
+
+    Responde ESTRICTAMENTE con un JSON válido (array de objetos):
+    [
+      {
+        "type": "positive", 
+        "title": "Gran avance",
+        "description": "Tu estado de ánimo ha mejorado notablemente hoy.",
+        "color": "green"
+      }
+    ]
+    
+    Tipos válidos: "positive" (verde), "attention" (naranja), "pattern" (morado), "wellness" (azul).
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+    const cleaned = cleanJSONResponse(response);
+    
+    return JSON.parse(cleaned);
+
+  } catch (error) {
+    console.error('[ERROR] Generando insights:', error);
+    return [];
+  }
+}
+
+/**
+ * Generar prompts de escritura diarios basados en el estado actual
+ */
+export async function generateDailyPrompts(entries) {
+  try {
+    const ai = getAI();
+    
+    if (!entries || entries.length === 0) return [];
+
+    const recentEntries = entries.slice(-5);
+    const entriesSummary = recentEntries.map(e => `Emoción: ${e.emotion?.name}, Contenido: ${e.content?.substring(0, 100)}`).join(' | ');
+
+    const modelName = await findWorkingModel();
+    const model = ai.getGenerativeModel({ model: modelName });
+
+    // CAMBIO: Instrucciones estrictas de longitud
+    const prompt = `
+    Actúa como un terapeuta empático. Basado en estos registros: "${entriesSummary}"
+
+    Genera 3 preguntas de reflexión cortas, creativas y personalizadas para tarjetas pequeñas y para animar al usuario a escribir de ello.
+    
+    REGLAS DE LONGITUD (ESTRICTAS):
+    - Título: Máximo 5 palabras.
+    - Contexto: Máximo 20 palabras.
+    - Pregunta: Máximo 20 palabras.
+    
+    Responde ESTRICTAMENTE con un JSON válido (array de objetos):
+    [
+      {
+        "title": "Sobre tu enojo",
+        "description": "Mencionaste frustración ayer",
+        "prompt": "¿Qué te ayudaría a soltar esa tensión hoy?",
+        "tone": "reflective"
+      }
+    ]
+    Tonos válidos: "reflective", "gratitude", "growth", "calm".
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response.text();
+    const cleaned = cleanJSONResponse(response);
+    
+    return JSON.parse(cleaned);
+
+  } catch (error) {
+    console.error('[ERROR] Generando prompts:', error);
+    return [];
+  }
+}
 // Exportar también la función de inicialización por si se necesita
 export { initializeAI, getAI };

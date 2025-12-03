@@ -175,3 +175,28 @@ export const saveDailyMood = async (userId, date, moodId, note = '') => {
       return {};
     }
   };
+
+  /**
+ * Obtener TODOS los moods del usuario para el Dashboard global
+ */
+export const getAllUserMoods = async (userId) => {
+  try {
+    const moodsRef = collection(db, 'users', userId, 'moods');
+    const q = query(moodsRef, orderBy('date', 'desc')); // Ordenados por fecha
+    
+    const snapshot = await getDocs(q);
+    const moods = [];
+
+    snapshot.forEach((doc) => {
+      moods.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return moods;
+  } catch (error) {
+    console.error('❌ Error obteniendo historial completo de moods:', error);
+    return [];
+  }
+};

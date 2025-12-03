@@ -1,11 +1,11 @@
 // src/app/dashboard/page.jsx
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { Heart, TrendingUp, BookOpen, Calendar, Loader, Flame, Target } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { getUserEntries } from '@/services/journalService';
+import { getAllUserMoods, MOOD_LEVELS } from '@/services/moodService'; 
 import Header from '@/components/dashboard/Header';
 import Sidebar from '@/components/dashboard/Sidebar';
 import StatsCard from '@/components/dashboard/StatsCard';
@@ -18,38 +18,77 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // Estados de datos reales
-  const [entries, setEntries] = useState([]);
+  const [journalEntries, setJournalEntries] = useState([]);
+  const [combinedData, setCombinedData] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Cargar entradas y calcular estadísticas
+  // Mapeo para traducir IDs de inglés (Mood Tracker) a español (Diario)
+  const MOOD_TRANSLATION = {
+    happy: 'feliz',
+    sad: 'triste',
+    angry: 'enojado',
+    anxious: 'ansioso',
+    calm: 'tranquilo',
+    excited: 'emocionado',
+    tired: 'cansado',
+    neutral: 'neutral'
+  };
+
   useEffect(() => {
     if (user?.uid) {
       loadDashboardData();
     }
   }, [user]);
 
-  // Escuchar cambios en el diario
   useEffect(() => {
-    const handleJournalUpdate = () => {
-      if (user?.uid) {
-        loadDashboardData();
-      }
+    const handleUpdate = () => {
+      if (user?.uid) loadDashboardData();
     };
-
-    window.addEventListener('journalUpdated', handleJournalUpdate);
-    return () => window.removeEventListener('journalUpdated', handleJournalUpdate);
+    window.addEventListener('journalUpdated', handleUpdate);
+    return () => window.removeEventListener('journalUpdated', handleUpdate);
   }, [user]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const entriesData = await getUserEntries(user.uid);
-      setEntries(entriesData);
       
-      const calculatedStats = calculateStats(entriesData);
+      // 1. Obtener Entradas de Diario
+      const journalData = await getUserEntries(user.uid);
+      setJournalEntries(journalData);
+      
+      // 2. Obtener Moods
+      const moodData = await getAllUserMoods(user.uid);
+
+      // 3. Normalizar Moods al formato del Diario (traduciendo IDs)
+      const normalizedMoods = moodData.map(mood => {
+        const moodConfigKey = Object.keys(MOOD_LEVELS).find(key => MOOD_LEVELS[key].id === mood.moodId);
+        const moodConfig = MOOD_LEVELS[moodConfigKey] || MOOD_LEVELS.NEUTRAL;
+
+        // Traducir el ID al español para que coincida con el diario
+        const spanishId = MOOD_TRANSLATION[mood.moodId] || mood.moodId;
+
+        return {
+          id: `mood-${mood.id}`,
+          type: 'mood',
+          content: mood.note || '',
+          entryDate: mood.timestamp,
+          createdAt: new Date(mood.timestamp),
+          emotion: {
+            id: spanishId, // ID normalizado (ej: 'feliz' en vez de 'happy')
+            name: moodConfig.label,
+            intensity: moodConfig.value * 2 
+          }
+        };
+      });
+
+      const allData = [...journalData, ...normalizedMoods];
+      allData.sort((a, b) => new Date(b.entryDate) - new Date(a.entryDate));
+      setCombinedData(allData);
+      
+      const calculatedStats = calculateStats(journalData, allData);
       setStats(calculatedStats);
+
     } catch (error) {
       console.error('❌ Error cargando dashboard:', error);
     } finally {
@@ -57,35 +96,46 @@ export default function DashboardPage() {
     }
   };
 
-  const calculateStats = (entriesData) => {
-    if (!entriesData || entriesData.length === 0) {
-      return {
-        totalEntries: 0,
-        currentStreak: 0,
-        dominantEmotion: { name: 'neutral', emoji: '😐', count: 0 },
-        thisWeekEntries: 0,
-        emotionBreakdown: {},
-        averageIntensity: 0,
-        weeklyTrend: 'stable'
-      };
-    }
-
-    const totalEntries = entriesData.length;
-    const currentStreak = calculateStreak(entriesData);
+  const calculateStats = (journalData, combinedData) => {
+    
+    // --- ESTADÍSTICAS BASADAS SOLO EN ENTRADAS (Journal) ---
+    const totalEntries = journalData.length;
+    const currentStreak = calculateStreak(journalData);
+    
+    let totalIntensity = 0;
+    journalData.forEach(entry => {
+        totalIntensity += entry.emotion.intensity || 5;
+    });
+    const averageIntensity = totalEntries > 0 
+      ? (totalIntensity / totalEntries).toFixed(1) 
+      : 0;
 
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const thisWeekEntries = entriesData.filter(entry => 
+    
+    const thisWeekEntries = journalData.filter(entry => 
       new Date(entry.entryDate) >= oneWeekAgo
     ).length;
 
-    const emotionCounts = {};
-    let totalIntensity = 0;
+    const lastWeekEntries = journalData.filter(entry => {
+        const entryDate = new Date(entry.entryDate);
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        return entryDate >= twoWeeksAgo && entryDate < oneWeekAgo;
+    }).length;
 
-    entriesData.forEach(entry => {
+    let weeklyTrend = 'stable';
+    if (thisWeekEntries > lastWeekEntries) weeklyTrend = 'up';
+    if (thisWeekEntries < lastWeekEntries) weeklyTrend = 'down';
+
+
+    // --- ESTADÍSTICAS BASADAS EN DATOS COMBINADOS ---
+    const emotionCounts = {};
+    const totalCombined = combinedData.length;
+
+    combinedData.forEach(entry => {
       const emotion = entry.emotion.id;
       emotionCounts[emotion] = (emotionCounts[emotion] || 0) + 1;
-      totalIntensity += entry.emotion.intensity || 5;
     });
 
     const dominantEmotionId = Object.entries(emotionCounts)
@@ -118,62 +168,38 @@ export default function DashboardPage() {
       name: emotionNames[dominantEmotionId] || 'Neutral',
       emoji: emotionEmojis[dominantEmotionId] || '😐',
       count: emotionCounts[dominantEmotionId] || 0,
-      percentage: totalEntries > 0 
-        ? Math.round((emotionCounts[dominantEmotionId] / totalEntries) * 100) 
+      percentage: totalCombined > 0 
+        ? Math.round((emotionCounts[dominantEmotionId] / totalCombined) * 100) 
         : 0
     };
-
-    const averageIntensity = totalEntries > 0 
-      ? (totalIntensity / totalEntries).toFixed(1) 
-      : 0;
-
-    const lastWeekEntries = entriesData.filter(entry => {
-      const entryDate = new Date(entry.entryDate);
-      const twoWeeksAgo = new Date();
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-      return entryDate >= twoWeeksAgo && entryDate < oneWeekAgo;
-    }).length;
-
-    let weeklyTrend = 'stable';
-    if (thisWeekEntries > lastWeekEntries) weeklyTrend = 'up';
-    if (thisWeekEntries < lastWeekEntries) weeklyTrend = 'down';
 
     return {
       totalEntries,
       currentStreak,
-      dominantEmotion,
-      thisWeekEntries,
-      emotionBreakdown: emotionCounts,
       averageIntensity,
+      thisWeekEntries,
       weeklyTrend,
-      lastWeekEntries
+      dominantEmotion
     };
   };
 
-  const calculateStreak = (entriesData) => {
-    if (!entriesData || entriesData.length === 0) return 0;
-
-    const sortedEntries = [...entriesData].sort((a, b) => 
-      new Date(b.entryDate) - new Date(a.entryDate)
-    );
-
+  const calculateStreak = (data) => {
+    if (!data || data.length === 0) return 0;
+    const uniqueDates = new Set(data.map(e => new Date(e.entryDate).toDateString()));
+    const sortedDates = Array.from(uniqueDates).map(d => new Date(d)).sort((a, b) => b - a);
     let streak = 0;
     let currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
-
-    for (let entry of sortedEntries) {
-      const entryDate = new Date(entry.entryDate);
-      entryDate.setHours(0, 0, 0, 0);
-
-      const diffDays = Math.floor((currentDate - entryDate) / (1000 * 60 * 60 * 24));
-
-      if (diffDays === streak) {
-        streak++;
-      } else if (diffDays > streak) {
-        break;
-      }
+    const lastEntryDate = sortedDates[0];
+    const diffToLast = Math.floor((currentDate - lastEntryDate) / (1000 * 60 * 60 * 24));
+    if (diffToLast > 1) return 0;
+    for (let i = 0; i < sortedDates.length; i++) {
+        const date = sortedDates[i];
+        const expectedDate = new Date(lastEntryDate);
+        expectedDate.setDate(lastEntryDate.getDate() - i);
+        if (date.toDateString() === expectedDate.toDateString()) streak++;
+        else break;
     }
-
     return streak;
   };
 
@@ -188,9 +214,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const statsCards = stats ? [
     {
@@ -200,7 +224,7 @@ export default function DashboardPage() {
       color: 'bg-blue-500',
       trend: stats.thisWeekEntries > 0 
         ? `+${stats.thisWeekEntries} esta semana` 
-        : 'Sin entradas esta semana',
+        : 'Sin actividad reciente',
       trendUp: stats.weeklyTrend === 'up'
     },
     {
@@ -208,11 +232,7 @@ export default function DashboardPage() {
       value: stats.currentStreak > 0 ? `${stats.currentStreak} día${stats.currentStreak !== 1 ? 's' : ''}` : '0 días',
       icon: Flame,
       color: 'bg-orange-500',
-      trend: stats.currentStreak >= 7 
-        ? '¡Increíble!' 
-        : stats.currentStreak >= 3 
-          ? '¡Sigue así!' 
-          : 'Comienza tu racha',
+      trend: stats.currentStreak >= 3 ? '¡Vas genial!' : '¡Tú puedes!',
       trendUp: stats.currentStreak > 0
     },
     {
@@ -221,20 +241,16 @@ export default function DashboardPage() {
       icon: Heart,
       color: 'bg-pink-500',
       trend: stats.dominantEmotion.count > 0 
-        ? `${stats.dominantEmotion.percentage}% del tiempo` 
+        ? `${stats.dominantEmotion.percentage}% de tu actividad` 
         : 'Sin datos',
-      trendUp: ['feliz', 'tranquilo', 'emocionado'].includes(stats.dominantEmotion.id)
+      trendUp: true
     },
     {
       title: 'Intensidad Promedio',
       value: `${stats.averageIntensity}/10`,
       icon: Target,
       color: 'bg-purple-500',
-      trend: stats.averageIntensity >= 7 
-        ? 'Emociones intensas' 
-        : stats.averageIntensity >= 4 
-          ? 'Nivel moderado' 
-          : 'Emociones suaves',
+      trend: 'En tus escritos',
       trendUp: stats.averageIntensity >= 5
     }
   ] : [];
@@ -248,37 +264,34 @@ export default function DashboardPage() {
 
         <main className="pt-4 lg:p-8 transition-all duration-300">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-            {/* Bienvenida */}
             <div className="mb-6 sm:mb-8">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white mb-2">
                 ¡Hola, {user.displayName || 'Usuario'}!
               </h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 {stats?.totalEntries > 0 
-                  ? `Has registrado ${stats.totalEntries} entrada${stats.totalEntries !== 1 ? 's' : ''} en tu diario emocional`
-                  : 'Comienza tu viaje de autoconocimiento escribiendo tu primera entrada'
+                  ? `Has escrito ${stats.totalEntries} entrada${stats.totalEntries !== 1 ? 's' : ''} en tu diario`
+                  : 'Comienza tu viaje de autoconocimiento'
                 }
               </p>
             </div>
 
-            {/* Stats Cards Grid - 4 columnas en desktop */}
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
               {statsCards.map((stat, index) => (
                 <StatsCard key={index} {...stat} />
               ))}
             </div>
 
-            {/* Layout Principal: 2 columnas en desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Columna Izquierda (2/3) */}
               <div className="lg:col-span-2 space-y-6">
-                <EmotionAnalysis entries={entries} />
-                <PromptCards />
+                {/* Ahora combinedData tiene los IDs normalizados en español */}
+                <EmotionAnalysis entries={combinedData} />
+                <PromptCards entries={combinedData} />
               </div>
 
-              {/* Columna Derecha (1/3) */}
               <div className="space-y-6">
-                <Insights entries={entries} stats={stats} />
+                <Insights entries={journalEntries} stats={stats} />
                 <QuickActions />
               </div>
             </div>

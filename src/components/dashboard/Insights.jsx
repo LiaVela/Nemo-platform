@@ -1,92 +1,87 @@
 // src/components/dashboard/Insights.jsx
+'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, TrendingUp, Lightbulb, Target, Brain } from 'lucide-react';
+import { Sparkles, TrendingUp, Lightbulb, Target, Brain, AlertCircle } from 'lucide-react';
+import { generateDashboardInsights } from '@/services/aiService';
 
-const Insights = ({ entries, stats }) => {
+const Insights = ({ entries }) => {
   const [insights, setInsights] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (entries && entries.length > 0 && stats) {
-      generateInsights();
-    }
-  }, [entries, stats]);
+    let isMounted = true;
 
-  const generateInsights = () => {
-    const newInsights = [];
-
-    // Insight 1: Tendencia Positiva/Negativa
-    if (stats.dominantEmotion) {
-      const positiveEmotions = ['feliz', 'tranquilo', 'emocionado'];
-      const isPositive = positiveEmotions.includes(stats.dominantEmotion.id);
-      
-      newInsights.push({
-        type: isPositive ? 'positive' : 'attention',
-        icon: TrendingUp,
-        title: isPositive ? 'Tendencia Positiva' : 'Área de Atención',
-        description: isPositive
-          ? `Tus niveles de ${stats.dominantEmotion.name.toLowerCase()} han aumentado un ${stats.dominantEmotion.percentage}% esta semana. ¡Sigue así!`
-          : `Has experimentado ${stats.dominantEmotion.name.toLowerCase()} en el ${stats.dominantEmotion.percentage}% de tus entradas. Considera hablar con alguien de confianza.`,
-        color: isPositive ? 'green' : 'orange'
-      });
-    }
-
-    // Insight 2: Patrón de escritura
-    if (entries.length >= 3) {
-      const morningEntries = entries.filter(e => {
-        const hour = new Date(e.createdAt).getHours();
-        return hour >= 6 && hour < 12;
-      }).length;
-
-      const afternoonEntries = entries.filter(e => {
-        const hour = new Date(e.createdAt).getHours();
-        return hour >= 12 && hour < 18;
-      }).length;
-
-      const eveningEntries = entries.filter(e => {
-        const hour = new Date(e.createdAt).getHours();
-        return hour >= 18 || hour < 6;
-      }).length;
-
-      const maxTime = Math.max(morningEntries, afternoonEntries, eveningEntries);
-      let timeOfDay = 'por la mañana';
-      if (maxTime === afternoonEntries) timeOfDay = 'por la tarde';
-      if (maxTime === eveningEntries) timeOfDay = 'por la noche';
-
-      if (maxTime > 0) {
-        newInsights.push({
-          type: 'suggestion',
-          icon: Lightbulb,
-          title: 'Sugerencia Personalizada',
-          description: `Noté que escribes más ${timeOfDay}. Considera mantener esta rutina para mejores resultados.`,
-          color: 'yellow'
-        });
+    const loadInsights = async () => {
+      if (!entries || entries.length === 0) {
+        setLoading(false);
+        return;
       }
-    }
 
-    // Insight 3: Patrón detectado
-    if (stats.currentStreak >= 3) {
-      newInsights.push({
-        type: 'pattern',
-        icon: Target,
-        title: 'Patrón Detectado',
-        description: `Llevas ${stats.currentStreak} días consecutivos escribiendo. La consistencia es clave para el autoconocimiento.`,
-        color: 'purple'
-      });
-    }
+      // 1. Generar una "firma" única de los datos actuales
+      // Usamos la longitud y la fecha de la última entrada (que es la más reciente si está ordenado)
+      // Asumimos que entries[0] es la más reciente o entries[entries.length-1]. 
+      // Para mayor seguridad usamos la longitud y el ID de la primera.
+      const lastEntry = entries[0] || {}; 
+      const dataSignature = `${entries.length}-${lastEntry.id}-${lastEntry.updatedAt || lastEntry.createdAt}`;
+      
+      const CACHE_KEY = 'cached_insights_data';
+      const SIGNATURE_KEY = 'cached_insights_signature';
 
-    // Insight 4: Consejo de bienestar
-    if (stats.averageIntensity >= 7) {
-      newInsights.push({
-        type: 'wellness',
-        icon: Brain,
-        title: 'Consejo de Bienestar',
-        description: 'Tus emociones han sido intensas últimamente. Recuerda practicar técnicas de respiración y mindfulness.',
-        color: 'blue'
-      });
-    }
+      // 2. Verificar caché
+      const cachedSignature = localStorage.getItem(SIGNATURE_KEY);
+      const cachedData = localStorage.getItem(CACHE_KEY);
 
-    setInsights(newInsights.slice(0, 4)); // Máximo 4 insights
+      if (cachedSignature === dataSignature && cachedData) {
+        console.log('⚡ Usando Insights en caché (no ha cambiado la data)');
+        if (isMounted) {
+          setInsights(JSON.parse(cachedData));
+          setLoading(false);
+        }
+        return;
+      }
+
+      // 3. Si no hay caché válido, llamar a la IA
+      console.log('🤖 Generando nuevos Insights con IA...');
+      setLoading(true);
+      try {
+        const aiInsights = await generateDashboardInsights(entries);
+        
+        if (isMounted) {
+          if (aiInsights && aiInsights.length > 0) {
+            setInsights(aiInsights);
+            // Guardar en caché
+            localStorage.setItem(CACHE_KEY, JSON.stringify(aiInsights));
+            localStorage.setItem(SIGNATURE_KEY, dataSignature);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching insights:", error);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    // Debounce pequeño
+    const timeoutId = setTimeout(() => {
+      loadInsights();
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [entries]); // Se ejecuta solo cuando 'entries' cambia
+
+  const getIcon = (type) => {
+    switch (type) {
+      case 'positive': return TrendingUp;
+      case 'attention': return AlertCircle;
+      case 'pattern': return Target;
+      case 'wellness': return Brain;
+      case 'suggestion': return Lightbulb;
+      default: return Sparkles;
+    }
   };
 
   const getColorClasses = (color) => {
@@ -122,46 +117,58 @@ const Insights = ({ entries, stats }) => {
     return colors[color] || colors.purple;
   };
 
-  if (!entries || entries.length === 0) {
+  if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
-            <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+      <div className="space-y-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="rounded-2xl shadow-sm p-4 border border-gray-100 dark:border-gray-800 animate-pulse bg-white dark:bg-gray-800">
+            <div className="flex gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-gray-700"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+              </div>
+            </div>
           </div>
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white">
-            Insights de IA
-          </h3>
-        </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Escribe algunas entradas para recibir insights personalizados
-        </p>
+        ))}
       </div>
     );
   }
 
+  if (!entries || entries.length === 0) return null;
+
   return (
     <div className="space-y-4">
-      {insights.map((insight, index) => (
-        <div
-          key={index}
-          className={`rounded-2xl shadow-lg p-4 border ${getColorClasses(insight.color)} transition-all hover:shadow-xl`}
-        >
-          <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-xl flex-shrink-0 ${getIconColorClasses(insight.color)}`}>
-              <insight.icon className="w-5 h-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className={`text-sm font-bold mb-1 ${getTextColorClasses(insight.color)}`}>
-                {insight.title}
-              </h4>
-              <p className={`text-xs ${getTextColorClasses(insight.color)} opacity-90`}>
-                {insight.description}
-              </p>
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <Sparkles className="w-4 h-4 text-purple-500" />
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+          Insights IA
+        </span>
+      </div>
+      
+      {insights.map((insight, index) => {
+        const Icon = getIcon(insight.type);
+        return (
+          <div
+            key={index}
+            className={`rounded-2xl shadow-sm p-4 border ${getColorClasses(insight.color)} transition-all hover:shadow-md`}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`p-2 rounded-xl flex-shrink-0 ${getIconColorClasses(insight.color)}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className={`text-sm font-bold mb-0.5 ${getTextColorClasses(insight.color)} line-clamp-1`}>
+                  {insight.title}
+                </h4>
+                <p className={`text-xs ${getTextColorClasses(insight.color)} opacity-90 line-clamp-2 leading-relaxed`}>
+                  {insight.description}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

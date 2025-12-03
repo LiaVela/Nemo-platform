@@ -100,7 +100,8 @@ export default function MoodTrackerPage() {
     try {
       await saveDailyMood(user.uid, selectedDate, moodLevel, note);
 
-      // Recargar moods
+      window.dispatchEvent(new Event('journalUpdated'));
+
       const monthMoods = await getMonthMoods(user.uid, year, month + 1);
       setMoods(monthMoods);
       setStats(getMonthStats(monthMoods));
